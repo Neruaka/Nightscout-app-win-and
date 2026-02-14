@@ -1,0 +1,28 @@
+services:
+  mongo:
+    image: mongo:7
+    container_name: nightscout-mongo
+    restart: unless-stopped
+    ports:
+      - "27017:27017"
+    volumes:
+      - mongo_data:/data/db
+
+  nightscout:
+    image: nightscout/cgm-remote-monitor:latest
+    container_name: nightscout-local
+    restart: unless-stopped
+    depends_on:
+      - mongo
+    ports:
+      - "1337:1337"
+    environment:
+      MONGODB_URI: mongodb://mongo:27017/nightscout
+      API_SECRET: ${API_SECRET}
+      TZ: ${TZ}
+      DISPLAY_UNITS: ${DISPLAY_UNITS}
+      INSECURE_USE_HTTP: ${INSECURE_USE_HTTP}
+      NODE_ENV: production
+
+volumes:
+  mongo_data:

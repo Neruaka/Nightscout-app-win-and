@@ -1,0 +1,22 @@
+{
+  "name": "nightscout-platform",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Nightscout web + Electron desktop monorepo",
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
+  "scripts": {
+    "build": "npm run --workspaces build",
+    "typecheck": "npm run --workspaces typecheck",
+    "test": "npm run --workspaces test --if-present",
+    "dev:desktop": "npm --workspace apps/desktop run dev",
+    "build:desktop": "npm --workspace apps/desktop run build",
+    "build:desktop:win": "npm --workspace apps/desktop run dist:win"
+  },
+  "engines": {
+    "node": ">=20.0.0",
+    "npm": ">=10.0.0"
+  }
+}

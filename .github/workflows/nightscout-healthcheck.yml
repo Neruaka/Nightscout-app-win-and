@@ -1,0 +1,22 @@
+name: nightscout-healthcheck
+
+on:
+  schedule:
+    - cron: "*/10 * * * *"
+  workflow_dispatch:
+
+jobs:
+  check-nightscout:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Nightscout status check
+        env:
+          NIGHTSCOUT_URL: ${{ secrets.NIGHTSCOUT_URL }}
+        run: |
+          if [ -z "${NIGHTSCOUT_URL}" ]; then
+            echo "Missing NIGHTSCOUT_URL secret"
+            exit 1
+          fi
+
+          curl --silent --show-error --fail "${NIGHTSCOUT_URL}/api/v1/status.json" > /tmp/status.json
+          echo "Nightscout status endpoint is reachable"
