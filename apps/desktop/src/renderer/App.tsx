@@ -15,6 +15,7 @@ import type {
   GlucoseEntry,
   NightscoutDesktopSettings
 } from "@nightscout/shared-types";
+import { calculateInsulinAdvice, glucoseFromMgdlToGL } from "./insulinAdvisor";
 
 const REFRESH_INTERVAL_MS = 60_000;
 
@@ -90,6 +91,27 @@ function toChartData(entries: GlucoseEntry[], units: DisplayUnits) {
     }));
 }
 
+function getCurrentLocalTimeHHMM(): string {
+  const now = new Date();
+  const hours = String(now.getHours()).padStart(2, "0");
+  const minutes = String(now.getMinutes()).padStart(2, "0");
+  return `${hours}:${minutes}`;
+}
+
+function parseNumericInput(raw: string): number | null {
+  const normalized = raw.trim().replace(",", ".");
+  if (!normalized) {
+    return null;
+  }
+
+  const value = Number(normalized);
+  if (!Number.isFinite(value)) {
+    return null;
+  }
+
+  return value;
+}
+
 async function loadSettingsIntoState(
   setSettings: (value: NightscoutDesktopSettings) => void,
   setBaseUrl: (value: string) => void,
@@ -119,6 +141,9 @@ export function App() {
   const [readTokenInput, setReadTokenInput] = useState("");
   const [unitsInput, setUnitsInput] = useState<DisplayUnits>("mmol");
   const [lastRefreshAt, setLastRefreshAt] = useState<string | null>(null);
+  const [carbsInput, setCarbsInput] = useState("");
+  const [glucoseGLInput, setGlucoseGLInput] = useState("");
+  const [mealTimeInput, setMealTimeInput] = useState(getCurrentLocalTimeHHMM());
 
   const activeUnits = settings?.units ?? unitsInput;
 
@@ -137,6 +162,52 @@ export function App() {
 
     return dashboard.entries.slice(0, 36);
   }, [dashboard]);
+
+  const liveGlucoseGL = useMemo(() => {
+    if (dashboard?.summary.current === null || dashboard?.summary.current === undefined) {
+      return null;
+    }
+
+    return glucoseFromMgdlToGL(dashboard.summary.current);
+  }, [dashboard?.summary.current]);
+
+  const insulinAdvisorState = useMemo(() => {
+    const carbs = parseNumericInput(carbsInput);
+    const currentGlucoseGL = parseNumericInput(glucoseGLInput);
+
+    if (!carbsInput.trim() || !glucoseGLInput.trim()) {
+      return {
+        advice: null,
+        message: "Enter carbs and current glucose to calculate an estimate."
+      };
+    }
+
+    if (carbs === null || currentGlucoseGL === null) {
+      return {
+        advice: null,
+        message: "Carbs and glucose must be numeric values."
+      };
+    }
+
+    try {
+      const advice = calculateInsulinAdvice({
+        carbsGrams: carbs,
+        currentGlucoseGL,
+        mealTimeHHMM: mealTimeInput
+      });
+
+      return {
+        advice,
+        message: null
+      };
+    } catch (error) {
+      return {
+        advice: null,
+        message:
+          error instanceof Error ? error.message : "Unable to calculate insulin estimate."
+      };
+    }
+  }, [carbsInput, glucoseGLInput, mealTimeInput]);
 
   async function refreshDashboard(showLoadingState = true): Promise<void> {
     if (showLoadingState) {
@@ -183,6 +254,14 @@ export function App() {
     };
   }, []);
 
+  useEffect(() => {
+    if (glucoseGLInput.trim() || liveGlucoseGL === null) {
+      return;
+    }
+
+    setGlucoseGLInput(liveGlucoseGL.toFixed(2));
+  }, [liveGlucoseGL, glucoseGLInput]);
+
   async function handleSaveSettings(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setIsSaving(true);
@@ -218,6 +297,21 @@ export function App() {
   }
 
   const sourceLabel = dashboard?.source === "cache" ? "Cache" : "Live API";
+  const advisorStatus = insulinAdvisorState.advice?.glucoseStatus ?? null;
+
+  let advisorStatusLabel = "Awaiting input";
+  let advisorStatusClass = "status-chip";
+
+  if (advisorStatus === "high") {
+    advisorStatusLabel = "Above target";
+    advisorStatusClass = "status-chip status-chip--high";
+  } else if (advisorStatus === "low") {
+    advisorStatusLabel = "Below target";
+    advisorStatusClass = "status-chip status-chip--low";
+  } else if (advisorStatus === "in-range") {
+    advisorStatusLabel = "In target range";
+    advisorStatusClass = "status-chip status-chip--ok";
+  }
 
   return (
     <div className="app-shell">
@@ -320,7 +414,123 @@ export function App() {
         </article>
       </section>
 
-      <section className="grid grid--content reveal reveal-delay-3">
+      <section className="panel insulin-panel reveal reveal-delay-3">
+        <div className="insulin-head">
+          <h2>Insulin advisor (estimate)</h2>
+          <span className={advisorStatusClass}>{advisorStatusLabel}</span>
+        </div>
+        <p className="insulin-disclaimer">
+          Uses your personal factors: 1U/5g from 04:00 to 11:30, then 1U/7g;
+          correction 1U lowers 0.5 g/L; target 0.80 to 1.30 g/L. This estimate
+          is not a medical prescription.
+        </p>
+
+        <div className="insulin-form">
+          <label>
+            Carbs (g)
+            <input
+              type="text"
+              inputMode="decimal"
+              value={carbsInput}
+              onChange={(event) => setCarbsInput(event.target.value)}
+              placeholder="e.g. 45"
+            />
+          </label>
+
+          <label>
+            Current glucose (g/L)
+            <input
+              type="text"
+              inputMode="decimal"
+              value={glucoseGLInput}
+              onChange={(event) => setGlucoseGLInput(event.target.value)}
+              placeholder="e.g. 1.12"
+            />
+          </label>
+
+          <label>
+            Meal time
+            <input
+              type="time"
+              value={mealTimeInput}
+              onChange={(event) => setMealTimeInput(event.target.value)}
+            />
+          </label>
+        </div>
+
+        <div className="insulin-actions">
+          <button
+            type="button"
+            className="secondary"
+            disabled={liveGlucoseGL === null}
+            onClick={() => {
+              if (liveGlucoseGL !== null) {
+                setGlucoseGLInput(liveGlucoseGL.toFixed(2));
+              }
+            }}
+          >
+            Use live glucose
+          </button>
+          <p className="insulin-live">
+            Live glucose:{" "}
+            {liveGlucoseGL === null ? "--" : `${liveGlucoseGL.toFixed(2)} g/L`}
+          </p>
+        </div>
+
+        {insulinAdvisorState.message ? (
+          <p className="warn-banner">{insulinAdvisorState.message}</p>
+        ) : null}
+
+        {insulinAdvisorState.advice ? (
+          <>
+            {insulinAdvisorState.advice.glucoseStatus === "low" ? (
+              <p className="error-banner">
+                Current glucose is below target. Treat low glucose first and
+                verify with your clinical plan before dosing.
+              </p>
+            ) : null}
+
+            <section className="grid grid--insulin">
+              <article className="metric-card">
+                <p>Carb ratio used</p>
+                <h3>1 U / {insulinAdvisorState.advice.ratioGramsPerUnit} g</h3>
+              </article>
+              <article className="metric-card">
+                <p>Meal bolus</p>
+                <h3>{insulinAdvisorState.advice.carbBolusUnits} U</h3>
+              </article>
+              <article className="metric-card">
+                <p>Correction bolus</p>
+                <h3>{insulinAdvisorState.advice.correctionUnits} U</h3>
+              </article>
+              <article className="metric-card">
+                <p>Total estimate</p>
+                <h3>{insulinAdvisorState.advice.totalUnits} U</h3>
+              </article>
+              <article className="metric-card">
+                <p>Rounded (0.5 U)</p>
+                <h3>{insulinAdvisorState.advice.roundedHalfUnitDose} U</h3>
+              </article>
+            </section>
+
+            <p className="token-status">
+              Target range: {insulinAdvisorState.advice.targetLowGL.toFixed(2)}
+              {" - "}
+              {insulinAdvisorState.advice.targetHighGL.toFixed(2)} g/L. Factor:
+              1 U = -{insulinAdvisorState.advice.correctionFactorDropGLPerUnit}{" "}
+              g/L.
+            </p>
+
+            <div className="insulin-notes">
+              {insulinAdvisorState.advice.notes.map((note) => (
+                <p key={note}>{note}</p>
+              ))}
+            </div>
+          </>
+        ) : null}
+      </section>
+
+      <section className="grid grid--content reveal reveal-delay-4">
         <article className="panel chart-panel">
           <h2>Last 24 hours</h2>
           {chartData.length === 0 ? (

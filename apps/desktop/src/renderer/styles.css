@@ -207,6 +207,88 @@ button:disabled {
   color: #ffedbb;
 }
 
+.insulin-panel {
+  display: grid;
+  gap: 14px;
+}
+
+.insulin-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.status-chip {
+  border-radius: 999px;
+  padding: 6px 10px;
+  font-size: 0.78rem;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  border: 1px solid rgba(139, 188, 212, 0.44);
+  color: #cde9fb;
+  background: rgba(79, 124, 150, 0.2);
+}
+
+.status-chip--ok {
+  border-color: rgba(101, 223, 160, 0.5);
+  background: rgba(72, 195, 137, 0.18);
+}
+
+.status-chip--high {
+  border-color: rgba(255, 211, 106, 0.55);
+  background: rgba(255, 211, 106, 0.18);
+}
+
+.status-chip--low {
+  border-color: rgba(255, 127, 127, 0.58);
+  background: rgba(255, 127, 127, 0.18);
+}
+
+.insulin-disclaimer {
+  margin: 0;
+  color: var(--muted);
+}
+
+.insulin-form {
+  display: grid;
+  gap: 12px;
+  grid-template-columns: repeat(3, minmax(220px, 1fr));
+}
+
+.insulin-form label {
+  display: grid;
+  gap: 6px;
+  color: var(--muted);
+  font-size: 0.86rem;
+}
+
+.insulin-actions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.insulin-live {
+  margin: 0;
+  color: var(--muted);
+}
+
+.grid--insulin {
+  grid-template-columns: repeat(5, minmax(150px, 1fr));
+}
+
+.insulin-notes {
+  display: grid;
+  gap: 6px;
+}
+
+.insulin-notes p {
+  margin: 0;
+  font-size: 0.88rem;
+  color: var(--muted);
+}
+
 .grid {
   display: grid;
   gap: 18px;
@@ -289,6 +371,10 @@ th {
   animation-delay: 200ms;
 }
 
+.reveal-delay-4 {
+  animation-delay: 260ms;
+}
+
 @keyframes fade-up {
   from {
     transform: translateY(10px);
@@ -311,6 +397,10 @@ th {
 
   .grid--content {
     grid-template-columns: 1fr;
+  }
+
+  .grid--insulin {
+    grid-template-columns: repeat(3, minmax(140px, 1fr));
   }
 }
 
@@ -336,11 +426,23 @@ th {
     grid-template-columns: 1fr;
   }
 
+  .insulin-form {
+    grid-template-columns: 1fr;
+  }
+
   .settings-actions {
     flex-wrap: wrap;
   }
 
+  .insulin-actions {
+    flex-wrap: wrap;
+  }
+
   .grid--stats {
+    grid-template-columns: 1fr;
+  }
+
+  .grid--insulin {
     grid-template-columns: 1fr;
   }
 }
