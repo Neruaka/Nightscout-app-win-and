@@ -1,6 +1,6 @@
 # Integrations API
 
-Backend service that receives Health Connect data from an Android bridge and exposes read endpoints for the Electron desktop app.
+Backend service that receives Health Connect data from an Android bridge and exposes read endpoints for the desktop app.
 
 ## Endpoints
 
@@ -17,8 +17,9 @@ Copy `.env.example` and set:
 - `DB_NAME` (optional, default `nightscout_integrations`)
 - `INGEST_TOKEN` (used by Android bridge)
 - `READ_TOKEN` (used by desktop app)
-- `PORT` (optional, default `8081`)
+- `PORT` (optional, default `8080`)
 - `CORS_ORIGIN` (optional, default `*`)
+- `NODE_ENV` (`production` on Railway)
 
 ## Local run
 
@@ -27,24 +28,25 @@ npm install
 npm --workspace apps/integrations-api run dev
 ```
 
-## Build
+## Build and start
 
 ```bash
-npm run build --workspace @nightscout/integrations-api
+npm --workspace apps/integrations-api run build
 npm --workspace apps/integrations-api run start
 ```
 
 ## Railway deploy
 
-1. Create a new Railway service from this repo.
+1. Create a new Railway service from this repository.
 2. Set root directory to `apps/integrations-api`.
-3. Add environment variables:
+3. Set environment variables:
    - `MONGODB_URI`
-   - `DB_NAME` (`nightscout_integrations` recommended)
+   - `DB_NAME`
    - `INGEST_TOKEN`
    - `READ_TOKEN`
-4. Keep `apps/integrations-api/railway.toml` in repo.
-5. Deploy and verify:
+   - `NODE_ENV=production`
+4. Deploy.
+5. Verify:
    - `GET https://<service>.up.railway.app/health`
    - Expect `{ "ok": true, ... }`
 
@@ -66,7 +68,7 @@ curl -X POST "https://<service>.up.railway.app/ingest/health-connect" \
   -d '{"deviceId":"android-test","syncedAt":"2026-02-15T11:30:00.000Z","summary":{"stepsLast24h":8500,"weightKgLatest":72.4,"weightUpdatedAt":"2026-02-15T08:15:00.000Z"},"meals":[]}'
 ```
 
-## Ingest payload format
+## Payload format
 
 ```json
 {
@@ -89,3 +91,8 @@ curl -X POST "https://<service>.up.railway.app/ingest/health-connect" \
   ]
 }
 ```
+
+## Notes
+
+- `INGEST_TOKEN` is only for Android bridge writes.
+- Desktop should only use `READ_TOKEN`.

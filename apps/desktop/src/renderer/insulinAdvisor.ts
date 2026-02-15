@@ -67,6 +67,39 @@ export function getRatioForMealTime(
   return windows[0]?.gramsPerUnit ?? 10;
 }
 
+export function getTargetRangeForMealTime(
+  profile: InsulinTherapyProfile,
+  mealTimeHHMM: string
+): { lowGL: number; highGL: number } {
+  if (!Array.isArray(profile.targetWindows) || profile.targetWindows.length === 0) {
+    return {
+      lowGL: profile.targetLowGL,
+      highGL: profile.targetHighGL
+    };
+  }
+
+  const targetMinutes = parseTimeToMinutes(mealTimeHHMM);
+  const windows = [...profile.targetWindows].sort(
+    (a, b) => parseTimeToMinutes(a.startHHMM) - parseTimeToMinutes(b.startHHMM)
+  );
+
+  for (const window of windows) {
+    const start = parseTimeToMinutes(window.startHHMM);
+    const end = parseTimeToMinutes(window.endHHMM);
+    if (isTimeInsideWindow(targetMinutes, start, end)) {
+      return {
+        lowGL: window.lowGL,
+        highGL: window.highGL
+      };
+    }
+  }
+
+  return {
+    lowGL: windows[0]?.lowGL ?? profile.targetLowGL,
+    highGL: windows[0]?.highGL ?? profile.targetHighGL
+  };
+}
+
 export function glucoseFromMgdlToGL(valueMgdl: number): number {
   return round2(valueMgdl / 100);
 }
@@ -125,15 +158,6 @@ export function calculateInsulinAdvice(input: InsulinAdviceInput): InsulinAdvice
   }
 
   if (
-    !Number.isFinite(input.profile.targetLowGL) ||
-    !Number.isFinite(input.profile.targetHighGL) ||
-    input.profile.targetLowGL <= 0 ||
-    input.profile.targetHighGL <= input.profile.targetLowGL
-  ) {
-    throw new Error("Target glucose range is invalid.");
-  }
-
-  if (
     !Number.isFinite(input.profile.correctionFactorDropGLPerUnit) ||
     input.profile.correctionFactorDropGLPerUnit <= 0
   ) {
@@ -145,21 +169,31 @@ export function calculateInsulinAdvice(input: InsulinAdviceInput): InsulinAdvice
     throw new Error("Carb ratio is invalid.");
   }
 
+  const targetRange = getTargetRangeForMealTime(input.profile, input.mealTimeHHMM);
+  if (
+    !Number.isFinite(targetRange.lowGL) ||
+    !Number.isFinite(targetRange.highGL) ||
+    targetRange.lowGL <= 0 ||
+    targetRange.highGL <= targetRange.lowGL
+  ) {
+    throw new Error("Target glucose range is invalid.");
+  }
+
   const carbBolusUnits = input.carbsGrams / ratioGramsPerUnit;
 
   let glucoseStatus: InsulinAdviceResult["glucoseStatus"] = "in-range";
   let correctionUnits = 0;
   const notes: string[] = [];
 
-  if (input.currentGlucoseGL < input.profile.targetLowGL) {
+  if (input.currentGlucoseGL < targetRange.lowGL) {
     glucoseStatus = "low";
     notes.push(
       "Current glucose is below target. Treat low glucose first before taking a correction dose."
     );
-  } else if (input.currentGlucoseGL > input.profile.targetHighGL) {
+  } else if (input.currentGlucoseGL > targetRange.highGL) {
     glucoseStatus = "high";
     correctionUnits =
-      (input.currentGlucoseGL - input.profile.targetHighGL) /
+      (input.currentGlucoseGL - targetRange.highGL) /
       input.profile.correctionFactorDropGLPerUnit;
   }
 
@@ -194,8 +228,8 @@ export function calculateInsulinAdvice(input: InsulinAdviceInput): InsulinAdvice
     totalUnits: round2(totalUnits),
     adjustedTotalUnits: round2(adjustedTotalUnits),
     roundedHalfUnitDose: round2(roundToHalfUnit(adjustedTotalUnits)),
-    targetLowGL: round2(input.profile.targetLowGL),
-    targetHighGL: round2(input.profile.targetHighGL),
+    targetLowGL: round2(targetRange.lowGL),
+    targetHighGL: round2(targetRange.highGL),
     correctionFactorDropGLPerUnit: round2(
       input.profile.correctionFactorDropGLPerUnit
     ),

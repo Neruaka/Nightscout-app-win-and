@@ -2,21 +2,22 @@
 
 This folder contains deployment assets for Nightscout on Railway.
 
-## 1) Create MongoDB Atlas
+## 1) MongoDB Atlas
 
-1. Create an Atlas project and cluster.
-2. Create a database user with read/write rights.
+1. Create Atlas project and cluster.
+2. Create DB user with read/write permissions.
 3. Add Railway egress to Atlas network access list.
-4. Copy connection string for `MONGODB_URI`.
+4. Copy the connection string for `MONGODB_URI`.
 
-## 2) Create Railway service
+## 2) Railway service
 
-1. In Railway, create a new service from this repository.
-2. Set root path to repository root.
-3. Railway detects `apps/nightscout-web/railway.toml` and Dockerfile.
+1. Create a Railway service from this repository.
+2. Set root directory to repository root (or use config in this app folder).
+3. Ensure Railway uses the Nightscout deployment config.
 4. Add environment variables from `.env.example`.
 
-Required variables:
+Required:
+
 - `MONGODB_URI`
 - `API_SECRET`
 - `TZ`
@@ -28,20 +29,24 @@ Required variables:
 
 - Use a long random `API_SECRET`.
 - Keep service URL private.
-- Use HTTPS only.
-- Do not reuse `API_SECRET` outside ingestion.
+- Enforce HTTPS only.
+- Do not use `API_SECRET` in desktop app.
 
 ## 4) xDrip+ ingestion
 
 In xDrip+ Nightscout upload settings:
-- Base URL: `https://<your-railway-host>.up.railway.app`
-- Secret: same `API_SECRET`
+
+- Base URL format expected by many xDrip builds:
+  - `https://<API_SECRET>@<your-railway-host>.up.railway.app/api/v1/`
+- If your build supports dedicated secret field, use the same `API_SECRET`.
+- If API auth fails, verify whether Nightscout expects SHA1-hashed secret for header auth.
 
 ## 5) Health checks
 
-- Health endpoint: `/api/v1/status.json`
-- Validate after each deployment.
+- `GET /api/v1/status.json` should return `200`.
+- If `401` appears, check token/secret auth context.
 
-## 6) Read token for desktop app
+## 6) Desktop read token
 
-For desktop read-only access, create a dedicated token flow in front of Nightscout (reverse proxy or app token gateway). Never embed `API_SECRET` in the desktop renderer.
+Use a dedicated read token for desktop access.
+Never embed `API_SECRET` in renderer code.

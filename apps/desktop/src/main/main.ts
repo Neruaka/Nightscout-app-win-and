@@ -1,4 +1,4 @@
-import { app, BrowserWindow, ipcMain } from "electron";
+import { Menu, app, BrowserWindow, ipcMain } from "electron";
 import path from "node:path";
 import type {
   DashboardError,
@@ -6,6 +6,7 @@ import type {
   DashboardPayload,
   DisplayUnits,
   InsulinTherapyProfile,
+  SaveAppPreferencesInput,
   SaveDesktopSettingsInput,
   SaveIntegrationSettingsInput,
   SyncResponse
@@ -54,6 +55,48 @@ function sanitizeIntegrationInput(input: unknown): SaveIntegrationSettingsInput 
         ? candidate.integrationReadToken
         : undefined
   };
+}
+
+function sanitizeAppPreferencesInput(input: unknown): SaveAppPreferencesInput {
+  if (!input || typeof input !== "object") {
+    return {};
+  }
+
+  const candidate = input as Partial<SaveAppPreferencesInput>;
+  return {
+    language:
+      candidate.language === "en" || candidate.language === "fr"
+        ? candidate.language
+        : undefined,
+    startWithWindows:
+      typeof candidate.startWithWindows === "boolean"
+        ? candidate.startWithWindows
+        : undefined,
+    widgetLayout:
+      candidate.widgetLayout === "minimal" ||
+      candidate.widgetLayout === "compact" ||
+      candidate.widgetLayout === "chart"
+        ? candidate.widgetLayout
+        : undefined
+  };
+}
+
+function setStartWithWindows(enabled: boolean): void {
+  if (process.platform !== "win32" && process.platform !== "darwin") {
+    return;
+  }
+
+  app.setLoginItemSettings({
+    openAtLogin: enabled
+  });
+}
+
+function getStartWithWindows(): boolean {
+  if (process.platform !== "win32" && process.platform !== "darwin") {
+    return false;
+  }
+
+  return app.getLoginItemSettings().openAtLogin;
 }
 
 function toDashboardError(error: unknown, canUseCachedData: boolean): DashboardError {
@@ -191,6 +234,7 @@ function createMainWindow(): BrowserWindow {
     minHeight: 720,
     title: "Nightscout Desktop",
     backgroundColor: "#071019",
+    autoHideMenuBar: true,
     webPreferences: {
       preload: path.join(__dirname, "preload.js"),
       contextIsolation: true,
@@ -213,6 +257,8 @@ function createMainWindow(): BrowserWindow {
       });
   }
 
+  window.setMenuBarVisibility(false);
+
   return window;
 }
 
@@ -229,6 +275,7 @@ function createWidgetWindow(): BrowserWindow {
     alwaysOnTop: true,
     frame: false,
     transparent: false,
+    movable: true,
     resizable: true,
     webPreferences: {
       preload: path.join(__dirname, "preload.js"),
@@ -241,12 +288,12 @@ function createWidgetWindow(): BrowserWindow {
   const devServerUrl = process.env.VITE_DEV_SERVER_URL;
 
   if (devServerUrl) {
-    window.loadURL(`${devServerUrl}#widget`).catch((error) => {
+    window.loadURL(`${devServerUrl}#/widget`).catch((error) => {
       console.error("Failed to load widget dev server", error);
     });
   } else {
     window
-      .loadFile(path.resolve(__dirname, "../renderer/index.html"), { hash: "widget" })
+      .loadFile(path.resolve(__dirname, "../renderer/index.html"), { hash: "/widget" })
       .catch((error) => {
         console.error("Failed to load widget renderer bundle", error);
       });
@@ -291,6 +338,13 @@ function registerIpcHandlers(): void {
   ipcMain.handle("desktop:save-integration-settings", async (_event, input: unknown) => {
     const payload = sanitizeIntegrationInput(input);
     await settingsStore.saveIntegrationSettings(payload);
+    return settingsStore.getPublicSettings();
+  });
+
+  ipcMain.handle("desktop:save-app-preferences", async (_event, input: unknown) => {
+    const payload = sanitizeAppPreferencesInput(input);
+    const nextPreferences = await settingsStore.saveAppPreferences(payload);
+    setStartWithWindows(nextPreferences.startWithWindows);
     return settingsStore.getPublicSettings();
   });
 
@@ -351,7 +405,15 @@ function registerIpcHandlers(): void {
 }
 
 app.whenReady().then(() => {
+  Menu.setApplicationMenu(null);
   registerIpcHandlers();
+  const currentPreferences = settingsStore.getAppPreferences();
+  const shouldStartWithWindows =
+    typeof currentPreferences.startWithWindows === "boolean"
+      ? currentPreferences.startWithWindows
+      : getStartWithWindows();
+  setStartWithWindows(shouldStartWithWindows);
+  void settingsStore.saveAppPreferences({ startWithWindows: shouldStartWithWindows });
   mainWindow = createMainWindow();
 
   app.on("activate", () => {

@@ -3,6 +3,7 @@ import type {
   DashboardIpcResponse,
   InsulinTherapyProfile,
   NightscoutDesktopSettings,
+  SaveAppPreferencesInput,
   SaveDesktopSettingsInput,
   SaveIntegrationSettingsInput,
   SyncResponse
@@ -19,6 +20,10 @@ const api = {
     input: SaveIntegrationSettingsInput
   ): Promise<NightscoutDesktopSettings> =>
     ipcRenderer.invoke("desktop:save-integration-settings", input),
+  saveAppPreferences: (
+    input: SaveAppPreferencesInput
+  ): Promise<NightscoutDesktopSettings> =>
+    ipcRenderer.invoke("desktop:save-app-preferences", input),
   removeReadToken: (): Promise<NightscoutDesktopSettings> =>
     ipcRenderer.invoke("desktop:remove-read-token"),
   getDashboard: (): Promise<DashboardIpcResponse> =>

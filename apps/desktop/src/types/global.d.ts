@@ -2,6 +2,7 @@ import type {
   DashboardIpcResponse,
   InsulinTherapyProfile,
   NightscoutDesktopSettings,
+  SaveAppPreferencesInput,
   SaveDesktopSettingsInput,
   SaveIntegrationSettingsInput,
   SyncResponse
@@ -17,6 +18,9 @@ declare global {
       ) => Promise<NightscoutDesktopSettings>;
       saveIntegrationSettings: (
         input: SaveIntegrationSettingsInput
+      ) => Promise<NightscoutDesktopSettings>;
+      saveAppPreferences: (
+        input: SaveAppPreferencesInput
       ) => Promise<NightscoutDesktopSettings>;
       removeReadToken: () => Promise<NightscoutDesktopSettings>;
       getDashboard: () => Promise<DashboardIpcResponse>;

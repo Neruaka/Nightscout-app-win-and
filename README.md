@@ -11,8 +11,8 @@ Monorepo for a private glucose dashboard based on:
 
 - `apps/nightscout-web`: Railway deployment assets for Nightscout
 - `apps/integrations-api`: Railway API for meals/health metrics
-- `apps/desktop`: Electron desktop application (React + TypeScript)
-- `apps/mobile-bridge-android`: Android bridge implementation guide
+- `apps/desktop`: Electron desktop app (React + TypeScript)
+- `apps/mobile-bridge-android`: Android app that syncs Health Connect data
 - `packages/shared-types`: shared TypeScript contracts
 - `infra/docker`: local development stack (Nightscout + MongoDB)
 - `ops`: backup and monitoring runbooks
@@ -20,11 +20,31 @@ Monorepo for a private glucose dashboard based on:
 
 ## Architecture summary
 
-1. xDrip+ uploads entries to Nightscout with `API_SECRET`.
+1. xDrip+ uploads entries to Nightscout using `API_SECRET`.
 2. Nightscout stores entries in MongoDB Atlas.
-3. Android bridge uploads Health Connect data to Integrations API.
-4. Web users read data from Nightscout URL.
-5. Desktop app reads Nightscout API + Integrations API with read tokens.
+3. Android bridge uploads Health Connect meals/summary to Integrations API.
+4. Desktop app reads Nightscout + Integrations API via read tokens.
+5. Desktop renders live glucose, chart, TIR, bolus advisor, and widget.
+
+## Desktop status (current implementation)
+
+- Dark theme UI with burger navigation
+- Routes:
+  - `#/` Home (header -> chart -> metrics -> TIR)
+  - `#/bolus` Bolus advisor
+  - `#/settings` App/profile/connection/integration settings
+  - `#/widget` compact widget mode
+- Editable insulin profile:
+  - Ratio windows by time ranges
+  - Target windows by time ranges
+  - Correction factor
+  - Target range (static + per-time blocks)
+  - Insulin action and carb absorption durations
+- Bolus estimate with IOB/COB adjustments
+- Inferred meal detection
+- Insulin sensitivity assistant + health score card
+- Desktop widget layouts (minimal/compact/chart) with pin/unpin and drag region
+- FR/EN translations
 
 ## Prerequisites
 
@@ -57,27 +77,29 @@ npm run dev:desktop
 ```
 
 5. In desktop settings, set:
-   - Base URL: your Nightscout URL (local or Railway)
-   - Read token: your Nightscout read token
+   - Nightscout base URL
+   - Nightscout read token
    - Integrations API URL
    - Integrations read token
 
-## Production deployment (Railway + Atlas)
+## Production deployment
 
-See `apps/nightscout-web/README.md` for step-by-step deployment and env vars.
-See `apps/integrations-api/README.md` for integration backend deployment.
+- Nightscout + Atlas: `apps/nightscout-web/README.md`
+- Integrations API: `apps/integrations-api/README.md`
+- Android bridge: `apps/mobile-bridge-android/README.md`
 
 ## CI/CD
 
 - `ci.yml`: typecheck + tests + desktop Windows artifact build
 - `atlas-backup.yml`: scheduled Atlas backup trigger (requires secrets)
+- `nightscout-healthcheck.yml`: Nightscout URL health checks
 
 ## Security notes
 
-- Never expose `API_SECRET` in the desktop app.
-- Desktop stores read token using OS keychain (`keytar`).
-- Integrations API ingest token is only for Android bridge.
-- Keep Nightscout URL private and enforce HTTPS.
+- Never expose `API_SECRET` in desktop.
+- Desktop stores sensitive tokens in OS keychain via `keytar`.
+- Integrations ingest token is write-only for Android bridge.
+- Keep Nightscout and Integrations URLs HTTPS.
 
 ## Useful scripts
 
@@ -88,3 +110,18 @@ See `apps/integrations-api/README.md` for integration backend deployment.
 - `npm run build:desktop`
 - `npm run build:integrations-api`
 - `npm run build:desktop:win`
+
+## Roadmap: next features
+
+1. Native low/high alerts with sound profiles and snooze.
+2. Profile presets (weekday/weekend/sport day) with one-click switch.
+3. Bolus history with compare planned dose vs actual treatment.
+4. Export PDF report (daily/weekly) with chart, TIR, and bolus stats.
+5. Widget notes / annotations.
+6. Multi-account support (switch between multiple Nightscout instances).
+7. Offline queue for manual notes and meal edits with sync retry.
+8. Caregiver share mode (read-only temporary dashboard link).
+9. Night mode timeline (22:00-06:00) with dedicated low-risk insights.
+10. Sensitivity assistant auto-apply proposals with safety guardrails.
+11. Health score trends over time (weekly/monthly trajectory).
+12. Signed update packages + auto-download/install.

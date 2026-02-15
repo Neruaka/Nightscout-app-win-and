@@ -1,24 +1,53 @@
 import Store from "electron-store";
 import * as keytar from "keytar";
 import type {
+  AppPreferences,
   DashboardPayload,
   DisplayUnits,
   InsulinTherapyProfile,
   IntegrationSettingsState,
   NightscoutDesktopSettings,
+  SaveAppPreferencesInput,
   SaveDesktopSettingsInput,
-  SaveIntegrationSettingsInput
+  SaveIntegrationSettingsInput,
+  TargetRangeWindow,
+  WidgetLayout
 } from "@nightscout/shared-types";
 
 const KEYCHAIN_SERVICE = "nightscout-desktop";
 const KEYCHAIN_ACCOUNT = "nightscout-read-token";
 const INTEGRATIONS_READ_TOKEN_ACCOUNT = "integrations-read-token";
 
+const DEFAULT_TARGET_WINDOWS: TargetRangeWindow[] = [
+  {
+    id: "sleep",
+    startHHMM: "00:00",
+    endHHMM: "05:59",
+    lowGL: 0.8,
+    highGL: 1.3
+  },
+  {
+    id: "morning",
+    startHHMM: "06:00",
+    endHHMM: "11:59",
+    lowGL: 0.8,
+    highGL: 1.3
+  },
+  {
+    id: "day",
+    startHHMM: "12:00",
+    endHHMM: "23:59",
+    lowGL: 0.8,
+    highGL: 1.3
+  }
+];
+
 const DEFAULT_INSULIN_PROFILE: InsulinTherapyProfile = {
   ratioWindows: [
     { id: "morning", startHHMM: "04:00", endHHMM: "11:30", gramsPerUnit: 5 },
     { id: "day", startHHMM: "11:31", endHHMM: "03:59", gramsPerUnit: 7 }
   ],
+  targetWindows: DEFAULT_TARGET_WINDOWS,
   correctionFactorDropGLPerUnit: 0.5,
   targetLowGL: 0.8,
   targetHighGL: 1.3,
@@ -26,11 +55,18 @@ const DEFAULT_INSULIN_PROFILE: InsulinTherapyProfile = {
   carbAbsorptionHours: 3
 };
 
+const DEFAULT_APP_PREFERENCES: AppPreferences = {
+  language: "fr",
+  startWithWindows: false,
+  widgetLayout: "compact"
+};
+
 interface LocalStoreShape {
   baseUrl: string;
   units: DisplayUnits;
   insulinProfile: InsulinTherapyProfile;
   integrationApiUrl: string;
+  appPreferences: AppPreferences;
   lastPayload?: DashboardPayload;
 }
 
@@ -42,21 +78,40 @@ function normalizeBaseUrl(raw: string): string {
   return value.replace(/\/+$/, "");
 }
 
-function normalizeIntegrationApiUrl(raw: string): string {
+function normalizeOptionalUrl(raw: string): string {
   const value = raw.trim();
   if (!value) {
     return "";
   }
 
   if (!value.startsWith("http://") && !value.startsWith("https://")) {
-    throw new Error("Integrations API URL must start with http:// or https://.");
+    throw new Error("URL must start with http:// or https://.");
   }
 
   return value.replace(/\/+$/, "");
 }
 
+function normalizeIntegrationApiUrl(raw: string): string {
+  return normalizeOptionalUrl(raw);
+}
+
 function isValidTimeHHMM(value: string): boolean {
   return /^([01]\d|2[0-3]):([0-5]\d)$/.test(value);
+}
+
+function normalizeWidgetLayout(value: unknown): WidgetLayout {
+  if (value === "minimal" || value === "chart") {
+    return value;
+  }
+  return "compact";
+}
+
+function ensureTargetWindows(profile: InsulinTherapyProfile): TargetRangeWindow[] {
+  if (!Array.isArray(profile.targetWindows) || profile.targetWindows.length === 0) {
+    return DEFAULT_TARGET_WINDOWS;
+  }
+
+  return profile.targetWindows;
 }
 
 function validateInsulinProfile(profile: InsulinTherapyProfile): void {
@@ -70,6 +125,19 @@ function validateInsulinProfile(profile: InsulinTherapyProfile): void {
     }
     if (!Number.isFinite(window.gramsPerUnit) || window.gramsPerUnit <= 0) {
       throw new Error("Ratio grams per unit must be positive.");
+    }
+  }
+
+  const targetWindows = ensureTargetWindows(profile);
+  for (const window of targetWindows) {
+    if (!isValidTimeHHMM(window.startHHMM) || !isValidTimeHHMM(window.endHHMM)) {
+      throw new Error("Target window time must use HH:MM.");
+    }
+    if (!Number.isFinite(window.lowGL) || !Number.isFinite(window.highGL)) {
+      throw new Error("Target window values must be numeric.");
+    }
+    if (window.lowGL <= 0 || window.highGL <= window.lowGL) {
+      throw new Error("Target window high must be greater than low.");
     }
   }
 
@@ -100,6 +168,27 @@ function validateInsulinProfile(profile: InsulinTherapyProfile): void {
   }
 }
 
+function normalizeAppPreferences(
+  current: AppPreferences,
+  input: SaveAppPreferencesInput
+): AppPreferences {
+  const nextLanguage =
+    input.language === "en" ? "en" : input.language === "fr" ? "fr" : current.language;
+
+  const nextWidgetLayout = normalizeWidgetLayout(
+    input.widgetLayout ?? current.widgetLayout
+  );
+
+  return {
+    language: nextLanguage,
+    startWithWindows:
+      typeof input.startWithWindows === "boolean"
+        ? input.startWithWindows
+        : current.startWithWindows,
+    widgetLayout: nextWidgetLayout
+  };
+}
+
 export class SettingsStore {
   private readonly store: Store<LocalStoreShape>;
 
@@ -110,7 +199,8 @@ export class SettingsStore {
         baseUrl: "",
         units: "mmol",
         insulinProfile: DEFAULT_INSULIN_PROFILE,
-        integrationApiUrl: ""
+        integrationApiUrl: "",
+        appPreferences: DEFAULT_APP_PREFERENCES
       }
     });
   }
@@ -124,12 +214,20 @@ export class SettingsStore {
   }
 
   getInsulinProfile(): InsulinTherapyProfile {
-    return this.store.get("insulinProfile", DEFAULT_INSULIN_PROFILE);
+    const profile = this.store.get("insulinProfile", DEFAULT_INSULIN_PROFILE);
+    return {
+      ...profile,
+      targetWindows: ensureTargetWindows(profile)
+    };
   }
 
   saveInsulinProfile(profile: InsulinTherapyProfile): InsulinTherapyProfile {
-    validateInsulinProfile(profile);
-    this.store.set("insulinProfile", profile);
+    const normalized: InsulinTherapyProfile = {
+      ...profile,
+      targetWindows: ensureTargetWindows(profile)
+    };
+    validateInsulinProfile(normalized);
+    this.store.set("insulinProfile", normalized);
     return this.getInsulinProfile();
   }
 
@@ -156,6 +254,24 @@ export class SettingsStore {
       integrationApiUrl: this.getIntegrationApiUrl(),
       hasIntegrationReadToken: Boolean(integrationReadToken)
     };
+  }
+
+  getAppPreferences(): AppPreferences {
+    const current = this.store.get("appPreferences", DEFAULT_APP_PREFERENCES);
+
+    return {
+      language: current.language === "en" ? "en" : "fr",
+      startWithWindows: Boolean(current.startWithWindows),
+      widgetLayout: normalizeWidgetLayout(current.widgetLayout)
+    };
+  }
+
+  async saveAppPreferences(input: SaveAppPreferencesInput): Promise<AppPreferences> {
+    const current = this.getAppPreferences();
+    const next = normalizeAppPreferences(current, input);
+
+    this.store.set("appPreferences", next);
+    return next;
   }
 
   async saveIntegrationSettings(
@@ -186,7 +302,8 @@ export class SettingsStore {
       hasReadToken: Boolean(token),
       units: this.getUnits(),
       insulinProfile: this.getInsulinProfile(),
-      integrations
+      integrations,
+      appPreferences: this.getAppPreferences()
     };
   }
 

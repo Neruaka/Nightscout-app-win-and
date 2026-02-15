@@ -1,4 +1,6 @@
 export type DisplayUnits = "mmol" | "mg/dL";
+export type LanguageCode = "en" | "fr";
+export type WidgetLayout = "minimal" | "compact" | "chart";
 
 export interface GlucoseEntry {
   date: number;
@@ -69,8 +71,17 @@ export interface InsulinRatioWindow {
   gramsPerUnit: number;
 }
 
+export interface TargetRangeWindow {
+  id: string;
+  startHHMM: string;
+  endHHMM: string;
+  lowGL: number;
+  highGL: number;
+}
+
 export interface InsulinTherapyProfile {
   ratioWindows: InsulinRatioWindow[];
+  targetWindows?: TargetRangeWindow[];
   correctionFactorDropGLPerUnit: number;
   targetLowGL: number;
   targetHighGL: number;
@@ -83,12 +94,19 @@ export interface IntegrationSettingsState {
   hasIntegrationReadToken: boolean;
 }
 
+export interface AppPreferences {
+  language: LanguageCode;
+  startWithWindows: boolean;
+  widgetLayout: WidgetLayout;
+}
+
 export interface NightscoutDesktopSettings {
   baseUrl: string;
   hasReadToken: boolean;
   units: DisplayUnits;
   insulinProfile: InsulinTherapyProfile;
   integrations: IntegrationSettingsState;
+  appPreferences: AppPreferences;
 }
 
 export interface SaveDesktopSettingsInput {
@@ -100,6 +118,12 @@ export interface SaveDesktopSettingsInput {
 export interface SaveIntegrationSettingsInput {
   integrationApiUrl?: string;
   integrationReadToken?: string;
+}
+
+export interface SaveAppPreferencesInput {
+  language?: LanguageCode;
+  startWithWindows?: boolean;
+  widgetLayout?: WidgetLayout;
 }
 
 export interface DashboardError {
