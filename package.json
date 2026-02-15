@@ -12,7 +12,9 @@
     "typecheck": "npm run --workspaces typecheck",
     "test": "npm run --workspaces test --if-present",
     "dev:desktop": "npm --workspace apps/desktop run dev",
+    "dev:integrations-api": "npm --workspace apps/integrations-api run dev",
     "build:desktop": "npm --workspace apps/desktop run build",
+    "build:integrations-api": "npm --workspace apps/integrations-api run build",
     "build:desktop:win": "npm --workspace apps/desktop run dist:win"
   },
   "engines": {

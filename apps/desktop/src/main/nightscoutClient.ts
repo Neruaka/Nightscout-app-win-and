@@ -1,4 +1,9 @@
-import type { GlucoseEntry, NightscoutClient, TrendSummary } from "@nightscout/shared-types";
+import type {
+  GlucoseEntry,
+  NightscoutClient,
+  TreatmentEntry,
+  TrendSummary
+} from "@nightscout/shared-types";
 
 interface NightscoutHttpClientOptions {
   baseUrl: string;
@@ -12,6 +17,16 @@ interface RawNightscoutEntry {
   sgv?: number;
   direction?: string;
   device?: string;
+}
+
+interface RawTreatmentEntry {
+  _id?: string;
+  created_at?: string;
+  eventType?: string;
+  insulin?: number;
+  carbs?: number;
+  notes?: string;
+  enteredBy?: string;
 }
 
 const DAY_IN_MS = 24 * 60 * 60 * 1000;
@@ -30,16 +45,6 @@ function buildHeaders(readToken: string): Headers {
   headers.set("Accept", "application/json");
   headers.set("Authorization", `Bearer ${readToken}`);
   return headers;
-}
-
-function parseEntriesPayload(rawPayload: unknown): GlucoseEntry[] {
-  if (!Array.isArray(rawPayload)) {
-    throw new Error("Nightscout response payload is invalid.");
-  }
-
-  return rawPayload
-    .map((item) => normalizeEntry(item as RawNightscoutEntry))
-    .filter((item): item is GlucoseEntry => item !== null);
 }
 
 function parseDate(raw: RawNightscoutEntry): number | null {
@@ -72,6 +77,46 @@ export function normalizeEntry(raw: RawNightscoutEntry): GlucoseEntry | null {
     direction: raw.direction,
     device: raw.device
   };
+}
+
+function normalizeTreatment(raw: RawTreatmentEntry): TreatmentEntry | null {
+  if (typeof raw.created_at !== "string") {
+    return null;
+  }
+
+  if (Number.isNaN(Date.parse(raw.created_at))) {
+    return null;
+  }
+
+  return {
+    _id: raw._id,
+    created_at: raw.created_at,
+    eventType: raw.eventType,
+    insulin: raw.insulin,
+    carbs: raw.carbs,
+    notes: raw.notes,
+    enteredBy: raw.enteredBy
+  };
+}
+
+function parseEntriesPayload(rawPayload: unknown): GlucoseEntry[] {
+  if (!Array.isArray(rawPayload)) {
+    throw new Error("Nightscout response payload is invalid.");
+  }
+
+  return rawPayload
+    .map((item) => normalizeEntry(item as RawNightscoutEntry))
+    .filter((item): item is GlucoseEntry => item !== null);
+}
+
+function parseTreatmentsPayload(rawPayload: unknown): TreatmentEntry[] {
+  if (!Array.isArray(rawPayload)) {
+    throw new Error("Nightscout treatment payload is invalid.");
+  }
+
+  return rawPayload
+    .map((item) => normalizeTreatment(item as RawTreatmentEntry))
+    .filter((item): item is TreatmentEntry => item !== null);
 }
 
 export function computeTrendSummary(entries: GlucoseEntry[]): TrendSummary {
@@ -115,9 +160,10 @@ export class NightscoutHttpClient implements NightscoutClient {
     return entries.sort((a, b) => b.date - a.date);
   }
 
-  async get24hSeries(): Promise<GlucoseEntry[]> {
-    const entries = await this.getLatest(288);
-    const cutoff = Date.now() - DAY_IN_MS;
+  async getEntriesForDays(days: number): Promise<GlucoseEntry[]> {
+    const maxEntries = Math.max(1, Math.ceil(days * 24 * 12));
+    const entries = await this.getLatest(maxEntries);
+    const cutoff = Date.now() - days * DAY_IN_MS;
     return entries.filter((entry) => entry.date >= cutoff).sort((a, b) => b.date - a.date);
   }
 
@@ -126,8 +172,43 @@ export class NightscoutHttpClient implements NightscoutClient {
     return computeTrendSummary(entries);
   }
 
+  async getTreatmentsForDays(days: number): Promise<TreatmentEntry[]> {
+    const maxTreatments = Math.max(50, Math.ceil(days * 24 * 6));
+    const params = new URLSearchParams();
+    params.set("count", String(maxTreatments));
+
+    const treatments = await this.requestTreatments(params);
+    const cutoff = Date.now() - days * DAY_IN_MS;
+
+    return treatments
+      .filter((treatment) => Date.parse(treatment.created_at) >= cutoff)
+      .sort(
+        (a, b) => Date.parse(b.created_at) - Date.parse(a.created_at)
+      );
+  }
+
   private async requestEntries(params: URLSearchParams): Promise<GlucoseEntry[]> {
-    const url = ensureHttpsUrl(this.baseUrl, "/api/v1/entries.json", params);
+    const response = await this.requestWithTokenFallback("/api/v1/entries.json", params);
+    const rawPayload: unknown = await response.json();
+    return parseEntriesPayload(rawPayload);
+  }
+
+  private async requestTreatments(
+    params: URLSearchParams
+  ): Promise<TreatmentEntry[]> {
+    const response = await this.requestWithTokenFallback(
+      "/api/v1/treatments.json",
+      params
+    );
+    const rawPayload: unknown = await response.json();
+    return parseTreatmentsPayload(rawPayload);
+  }
+
+  private async requestWithTokenFallback(
+    path: string,
+    params: URLSearchParams
+  ): Promise<Response> {
+    const url = ensureHttpsUrl(this.baseUrl, path, params);
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), this.timeoutMs);
 
@@ -139,19 +220,13 @@ export class NightscoutHttpClient implements NightscoutClient {
       });
 
       if (response.ok) {
-        const rawPayload: unknown = await response.json();
-        return parseEntriesPayload(rawPayload);
+        return response;
       }
 
       if (response.status === 401 || response.status === 403) {
         const fallbackParams = new URLSearchParams(params);
         fallbackParams.set("token", this.readToken);
-
-        const fallbackUrl = ensureHttpsUrl(
-          this.baseUrl,
-          "/api/v1/entries.json",
-          fallbackParams
-        );
+        const fallbackUrl = ensureHttpsUrl(this.baseUrl, path, fallbackParams);
         const fallbackResponse = await fetch(fallbackUrl, {
           method: "GET",
           headers: new Headers({ Accept: "application/json" }),
@@ -162,8 +237,7 @@ export class NightscoutHttpClient implements NightscoutClient {
           throw new Error(`Nightscout request failed (${fallbackResponse.status}).`);
         }
 
-        const rawPayload: unknown = await fallbackResponse.json();
-        return parseEntriesPayload(rawPayload);
+        return fallbackResponse;
       }
 
       throw new Error(`Nightscout request failed (${response.status}).`);
@@ -171,6 +245,7 @@ export class NightscoutHttpClient implements NightscoutClient {
       if (error instanceof Error && error.name === "AbortError") {
         throw new Error("Nightscout request timed out.");
       }
+
       throw error;
     } finally {
       clearTimeout(timeout);

@@ -8,6 +8,35 @@ export interface GlucoseEntry {
   device?: string;
 }
 
+export interface TreatmentEntry {
+  _id?: string;
+  created_at: string;
+  eventType?: string;
+  insulin?: number;
+  carbs?: number;
+  notes?: string;
+  enteredBy?: string;
+}
+
+export type MealSource = "myfitnesspal" | "health-connect";
+
+export interface MealEntry {
+  id: string;
+  name: string;
+  carbsGrams: number;
+  eatenAt: string;
+  source: MealSource;
+  calories?: number;
+}
+
+export interface HealthConnectSummary {
+  stepsLast24h: number | null;
+  weightKgLatest: number | null;
+  weightUpdatedAt: string | null;
+  syncedAt: string;
+  source: "health-connect";
+}
+
 export interface TrendSummary {
   current: number | null;
   delta: number | null;
@@ -18,6 +47,9 @@ export interface TrendSummary {
 export interface DashboardPayload {
   entries: GlucoseEntry[];
   summary: TrendSummary;
+  treatments: TreatmentEntry[];
+  meals: MealEntry[];
+  healthConnect: HealthConnectSummary | null;
   fetchedAt: string;
   source: "network" | "cache";
   stale: boolean;
@@ -25,20 +57,49 @@ export interface DashboardPayload {
 
 export interface NightscoutClient {
   getLatest(count: number): Promise<GlucoseEntry[]>;
-  get24hSeries(): Promise<GlucoseEntry[]>;
+  getEntriesForDays(days: number): Promise<GlucoseEntry[]>;
   getSummary(): Promise<TrendSummary>;
+  getTreatmentsForDays(days: number): Promise<TreatmentEntry[]>;
+}
+
+export interface InsulinRatioWindow {
+  id: string;
+  startHHMM: string;
+  endHHMM: string;
+  gramsPerUnit: number;
+}
+
+export interface InsulinTherapyProfile {
+  ratioWindows: InsulinRatioWindow[];
+  correctionFactorDropGLPerUnit: number;
+  targetLowGL: number;
+  targetHighGL: number;
+  insulinActionHours: number;
+  carbAbsorptionHours: number;
+}
+
+export interface IntegrationSettingsState {
+  integrationApiUrl: string;
+  hasIntegrationReadToken: boolean;
 }
 
 export interface NightscoutDesktopSettings {
   baseUrl: string;
   hasReadToken: boolean;
   units: DisplayUnits;
+  insulinProfile: InsulinTherapyProfile;
+  integrations: IntegrationSettingsState;
 }
 
 export interface SaveDesktopSettingsInput {
   baseUrl: string;
   readToken?: string;
   units: DisplayUnits;
+}
+
+export interface SaveIntegrationSettingsInput {
+  integrationApiUrl?: string;
+  integrationReadToken?: string;
 }
 
 export interface DashboardError {
@@ -49,4 +110,78 @@ export interface DashboardError {
 export interface DashboardIpcResponse {
   payload: DashboardPayload | null;
   error: DashboardError | null;
+}
+
+export interface SyncResponse {
+  ok: boolean;
+  message: string;
+}
+
+export interface TimeInRangeBucket {
+  label: "day" | "week" | "month";
+  from: string;
+  to: string;
+  count: number;
+  inRangePct: number;
+  lowPct: number;
+  highPct: number;
+  avgGL: number | null;
+}
+
+export interface TimeInRangeStats {
+  day: TimeInRangeBucket;
+  week: TimeInRangeBucket;
+  month: TimeInRangeBucket;
+}
+
+export interface IobCobSnapshot {
+  iobUnits: number;
+  cobGrams: number;
+}
+
+export interface InsulinAdviceInput {
+  carbsGrams: number;
+  currentGlucoseGL: number;
+  mealTimeHHMM: string;
+  profile: InsulinTherapyProfile;
+  iobUnits?: number;
+  cobGrams?: number;
+}
+
+export interface InsulinAdviceResult {
+  ratioGramsPerUnit: number;
+  carbBolusUnits: number;
+  correctionUnits: number;
+  adjustedCarbBolusUnits: number;
+  adjustedCorrectionUnits: number;
+  totalUnits: number;
+  adjustedTotalUnits: number;
+  roundedHalfUnitDose: number;
+  targetLowGL: number;
+  targetHighGL: number;
+  correctionFactorDropGLPerUnit: number;
+  glucoseStatus: "low" | "in-range" | "high";
+  notes: string[];
+}
+
+export interface IntegrationIngestSummary {
+  stepsLast24h: number | null;
+  weightKgLatest: number | null;
+  weightUpdatedAt: string | null;
+}
+
+export interface IntegrationIngestMeal {
+  id: string;
+  name: string;
+  carbsGrams: number;
+  eatenAt: string;
+  calories?: number;
+  source?: MealSource;
+}
+
+export interface IntegrationIngestPayload {
+  deviceId: string;
+  syncedAt: string;
+  summary: IntegrationIngestSummary;
+  meals: IntegrationIngestMeal[];
 }

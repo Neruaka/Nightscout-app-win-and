@@ -5,12 +5,18 @@ import type {
   DashboardIpcResponse,
   DashboardPayload,
   DisplayUnits,
-  SaveDesktopSettingsInput
+  InsulinTherapyProfile,
+  SaveDesktopSettingsInput,
+  SaveIntegrationSettingsInput,
+  SyncResponse
 } from "@nightscout/shared-types";
+import { IntegrationsHttpClient } from "./integrationsClient";
 import { NightscoutHttpClient, computeTrendSummary } from "./nightscoutClient";
 import { SettingsStore } from "./settingsStore";
 
 const settingsStore = new SettingsStore();
+let mainWindow: BrowserWindow | null = null;
+let widgetWindow: BrowserWindow | null = null;
 
 function sanitizeUnits(units: unknown): DisplayUnits {
   return units === "mg/dL" ? "mg/dL" : "mmol";
@@ -28,6 +34,25 @@ function sanitizeSaveInput(input: unknown): SaveDesktopSettingsInput {
     units: sanitizeUnits(candidate.units),
     readToken:
       typeof candidate.readToken === "string" ? candidate.readToken : undefined
+  };
+}
+
+function sanitizeIntegrationInput(input: unknown): SaveIntegrationSettingsInput {
+  if (!input || typeof input !== "object") {
+    return {};
+  }
+
+  const candidate = input as Partial<SaveIntegrationSettingsInput>;
+
+  return {
+    integrationApiUrl:
+      typeof candidate.integrationApiUrl === "string"
+        ? candidate.integrationApiUrl
+        : undefined,
+    integrationReadToken:
+      typeof candidate.integrationReadToken === "string"
+        ? candidate.integrationReadToken
+        : undefined
   };
 }
 
@@ -72,19 +97,58 @@ async function fetchDashboardData(): Promise<DashboardIpcResponse> {
     };
   }
 
-  const client = new NightscoutHttpClient({
+  const nightscoutClient = new NightscoutHttpClient({
     baseUrl,
     readToken,
     timeoutMs: 10_000
   });
 
   try {
-    const entries = await client.get24hSeries();
+    const [entries, treatments] = await Promise.all([
+      nightscoutClient.getEntriesForDays(30),
+      nightscoutClient.getTreatmentsForDays(7)
+    ]);
+
     const summary = computeTrendSummary(entries);
+    let healthConnect: DashboardPayload["healthConnect"] = null;
+    let meals: DashboardPayload["meals"] = [];
+    let integrationError: DashboardError | null = null;
+
+    const integrationApiUrl = settingsStore.getIntegrationApiUrl();
+    const integrationReadToken = await settingsStore.getIntegrationReadToken();
+
+    if (integrationApiUrl && integrationReadToken) {
+      try {
+        const integrationsClient = new IntegrationsHttpClient({
+          baseUrl: integrationApiUrl,
+          readToken: integrationReadToken,
+          timeoutMs: 10_000
+        });
+
+        const [nextSummary, nextMeals] = await Promise.all([
+          integrationsClient.getHealthSummary(),
+          integrationsClient.getMeals(30)
+        ]);
+
+        healthConnect = nextSummary;
+        meals = nextMeals;
+      } catch (error) {
+        integrationError = {
+          message:
+            error instanceof Error
+              ? `Integrations API unavailable: ${error.message}`
+              : "Integrations API unavailable.",
+          canUseCachedData: true
+        };
+      }
+    }
 
     const payload: DashboardPayload = {
       entries,
       summary,
+      treatments,
+      meals,
+      healthConnect,
       fetchedAt: new Date().toISOString(),
       source: "network",
       stale: false
@@ -94,7 +158,7 @@ async function fetchDashboardData(): Promise<DashboardIpcResponse> {
 
     return {
       payload,
-      error: null
+      error: integrationError
     };
   } catch (error) {
     const cachedPayload = settingsStore.getCachedPayload();
@@ -121,8 +185,8 @@ async function fetchDashboardData(): Promise<DashboardIpcResponse> {
 
 function createMainWindow(): BrowserWindow {
   const window = new BrowserWindow({
-    width: 1220,
-    height: 860,
+    width: 1320,
+    height: 920,
     minWidth: 1024,
     minHeight: 720,
     title: "Nightscout Desktop",
@@ -152,6 +216,58 @@ function createMainWindow(): BrowserWindow {
   return window;
 }
 
+function createWidgetWindow(): BrowserWindow {
+  const window = new BrowserWindow({
+    width: 300,
+    height: 190,
+    minWidth: 280,
+    minHeight: 160,
+    maxWidth: 420,
+    maxHeight: 260,
+    title: "Nightscout Widget",
+    backgroundColor: "#061019",
+    alwaysOnTop: true,
+    frame: false,
+    transparent: false,
+    resizable: true,
+    webPreferences: {
+      preload: path.join(__dirname, "preload.js"),
+      contextIsolation: true,
+      nodeIntegration: false,
+      devTools: true
+    }
+  });
+
+  const devServerUrl = process.env.VITE_DEV_SERVER_URL;
+
+  if (devServerUrl) {
+    window.loadURL(`${devServerUrl}#widget`).catch((error) => {
+      console.error("Failed to load widget dev server", error);
+    });
+  } else {
+    window
+      .loadFile(path.resolve(__dirname, "../renderer/index.html"), { hash: "widget" })
+      .catch((error) => {
+        console.error("Failed to load widget renderer bundle", error);
+      });
+  }
+
+  return window;
+}
+
+function getOrCreateWidgetWindow(): BrowserWindow {
+  if (widgetWindow && !widgetWindow.isDestroyed()) {
+    return widgetWindow;
+  }
+
+  widgetWindow = createWidgetWindow();
+  widgetWindow.on("closed", () => {
+    widgetWindow = null;
+  });
+
+  return widgetWindow;
+}
+
 function registerIpcHandlers(): void {
   ipcMain.handle("desktop:get-settings", async () => settingsStore.getPublicSettings());
 
@@ -161,17 +277,86 @@ function registerIpcHandlers(): void {
   });
 
   ipcMain.handle("desktop:remove-read-token", async () => settingsStore.removeReadToken());
-
   ipcMain.handle("desktop:get-dashboard", async () => fetchDashboardData());
+
+  ipcMain.handle("desktop:save-insulin-profile", async (_event, input: unknown) => {
+    if (!input || typeof input !== "object") {
+      throw new Error("Invalid insulin profile payload.");
+    }
+
+    settingsStore.saveInsulinProfile(input as InsulinTherapyProfile);
+    return settingsStore.getPublicSettings();
+  });
+
+  ipcMain.handle("desktop:save-integration-settings", async (_event, input: unknown) => {
+    const payload = sanitizeIntegrationInput(input);
+    await settingsStore.saveIntegrationSettings(payload);
+    return settingsStore.getPublicSettings();
+  });
+
+  ipcMain.handle("desktop:sync-integrations", async (_event, input: unknown) => {
+    const payload = sanitizeIntegrationInput(input);
+    if (Object.keys(payload).length > 0) {
+      await settingsStore.saveIntegrationSettings(payload);
+    }
+
+    const integrationApiUrl = settingsStore.getIntegrationApiUrl();
+    const integrationReadToken = await settingsStore.getIntegrationReadToken();
+
+    if (!integrationApiUrl || !integrationReadToken) {
+      return {
+        ok: false,
+        message: "Configure Integrations API URL and read token first."
+      } satisfies SyncResponse;
+    }
+
+    const integrationsClient = new IntegrationsHttpClient({
+      baseUrl: integrationApiUrl,
+      readToken: integrationReadToken,
+      timeoutMs: 10_000
+    });
+
+    const [summary, meals] = await Promise.all([
+      integrationsClient.getHealthSummary(),
+      integrationsClient.getMeals(30)
+    ]);
+
+    return {
+      ok: true,
+      message: `Integrations synced (${meals.length} meals, summary ${
+        summary ? "available" : "missing"
+      }).`
+    } satisfies SyncResponse;
+  });
+
+  ipcMain.handle("desktop:widget-open", async () => {
+    const widget = getOrCreateWidgetWindow();
+    widget.show();
+    widget.focus();
+    return true;
+  });
+
+  ipcMain.handle("desktop:widget-close", async () => {
+    if (widgetWindow && !widgetWindow.isDestroyed()) {
+      widgetWindow.close();
+    }
+    return true;
+  });
+
+  ipcMain.handle("desktop:widget-set-always-on-top", async (_event, isPinned: unknown) => {
+    const widget = getOrCreateWidgetWindow();
+    widget.setAlwaysOnTop(Boolean(isPinned));
+    return widget.isAlwaysOnTop();
+  });
 }
 
 app.whenReady().then(() => {
   registerIpcHandlers();
-  createMainWindow();
+  mainWindow = createMainWindow();
 
   app.on("activate", () => {
     if (BrowserWindow.getAllWindows().length === 0) {
-      createMainWindow();
+      mainWindow = createMainWindow();
     }
   });
 });

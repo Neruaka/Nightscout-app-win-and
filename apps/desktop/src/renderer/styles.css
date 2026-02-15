@@ -289,6 +289,47 @@ button:disabled {
   color: var(--muted);
 }
 
+.profile-form {
+  display: grid;
+  gap: 14px;
+}
+
+.ratio-table {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(100px, 1fr));
+  gap: 8px;
+}
+
+.ratio-head {
+  font-size: 0.8rem;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+
+.ratio-row {
+  display: contents;
+}
+
+.profile-grid,
+.integration-grid {
+  display: grid;
+  gap: 12px;
+  grid-template-columns: repeat(3, minmax(220px, 1fr));
+}
+
+.profile-grid label,
+.integration-grid label {
+  display: grid;
+  gap: 6px;
+  color: var(--muted);
+  font-size: 0.86rem;
+}
+
+.grid--tir {
+  grid-template-columns: repeat(3, minmax(180px, 1fr));
+}
+
 .grid {
   display: grid;
   gap: 18px;
@@ -375,6 +416,80 @@ th {
   animation-delay: 260ms;
 }
 
+.reveal-delay-5 {
+  animation-delay: 320ms;
+}
+
+.reveal-delay-6 {
+  animation-delay: 380ms;
+}
+
+.reveal-delay-7 {
+  animation-delay: 440ms;
+}
+
+.widget-shell {
+  min-height: 100vh;
+  padding: 10px;
+  background: linear-gradient(160deg, #06111d, #0e2237);
+  color: var(--text);
+  display: grid;
+  gap: 8px;
+}
+
+.widget-topbar,
+.widget-footer {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.widget-title {
+  font-size: 0.8rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: #b7d9ef;
+}
+
+.widget-actions {
+  display: flex;
+  gap: 6px;
+}
+
+.widget-btn {
+  border: 1px solid rgba(137, 188, 216, 0.4);
+  border-radius: 8px;
+  background: rgba(75, 116, 140, 0.3);
+  color: var(--text);
+  padding: 4px 8px;
+  font-size: 0.78rem;
+  cursor: pointer;
+}
+
+.widget-main {
+  display: grid;
+  gap: 4px;
+}
+
+.widget-value {
+  margin: 0;
+  font-size: 1.7rem;
+  font-weight: 700;
+}
+
+.widget-meta,
+.widget-refresh {
+  margin: 0;
+  font-size: 0.78rem;
+  color: var(--muted);
+}
+
+.widget-error {
+  margin: 0;
+  color: #ffdede;
+  font-size: 0.8rem;
+}
+
 @keyframes fade-up {
   from {
     transform: translateY(10px);
@@ -401,6 +516,12 @@ th {
 
   .grid--insulin {
     grid-template-columns: repeat(3, minmax(140px, 1fr));
+  }
+
+  .profile-grid,
+  .integration-grid,
+  .grid--tir {
+    grid-template-columns: 1fr 1fr;
   }
 }
 
@@ -443,6 +564,17 @@ th {
   }
 
   .grid--insulin {
+    grid-template-columns: 1fr;
+  }
+
+  .ratio-row,
+  .profile-grid,
+  .integration-grid,
+  .grid--tir {
+    grid-template-columns: 1fr;
+  }
+
+  .ratio-table {
     grid-template-columns: 1fr;
   }
 }

@@ -1,7 +1,10 @@
 import type {
   DashboardIpcResponse,
+  InsulinTherapyProfile,
   NightscoutDesktopSettings,
-  SaveDesktopSettingsInput
+  SaveDesktopSettingsInput,
+  SaveIntegrationSettingsInput,
+  SyncResponse
 } from "@nightscout/shared-types";
 
 declare global {
@@ -9,8 +12,18 @@ declare global {
     nightscoutApi: {
       getSettings: () => Promise<NightscoutDesktopSettings>;
       saveSettings: (input: SaveDesktopSettingsInput) => Promise<NightscoutDesktopSettings>;
+      saveInsulinProfile: (
+        profile: InsulinTherapyProfile
+      ) => Promise<NightscoutDesktopSettings>;
+      saveIntegrationSettings: (
+        input: SaveIntegrationSettingsInput
+      ) => Promise<NightscoutDesktopSettings>;
       removeReadToken: () => Promise<NightscoutDesktopSettings>;
       getDashboard: () => Promise<DashboardIpcResponse>;
+      syncIntegrations: (input?: SaveIntegrationSettingsInput) => Promise<SyncResponse>;
+      openWidget: () => Promise<boolean>;
+      closeWidget: () => Promise<boolean>;
+      setWidgetAlwaysOnTop: (isPinned: boolean) => Promise<boolean>;
     };
   }
 }
