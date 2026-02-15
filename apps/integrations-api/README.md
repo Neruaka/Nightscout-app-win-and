@@ -37,13 +37,12 @@ npm --workspace apps/integrations-api run start
 ## Railway deploy
 
 1. Create a new Railway service from this repo.
-2. Set root directory to repository root.
+2. Set root directory to `apps/integrations-api`.
 3. Add environment variables:
    - `MONGODB_URI`
    - `DB_NAME` (`nightscout_integrations` recommended)
    - `INGEST_TOKEN`
    - `READ_TOKEN`
-   - `PORT=8081`
 4. Keep `apps/integrations-api/railway.toml` in repo.
 5. Deploy and verify:
    - `GET https://<service>.up.railway.app/health`

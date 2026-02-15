@@ -1,5 +1,5 @@
 import { MongoClient, type Collection, type Db } from "mongodb";
-import type { HealthConnectSummary, MealEntry } from "@nightscout/shared-types";
+import type { HealthConnectSummary, MealEntry } from "./types";
 
 interface HealthSummaryDocument extends HealthConnectSummary {
   _id: "latest";
