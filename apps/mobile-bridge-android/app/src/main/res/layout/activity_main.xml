@@ -1,0 +1,104 @@
+<?xml version="1.0" encoding="utf-8"?>
+<ScrollView xmlns:android="http://schemas.android.com/apk/res/android"
+  android:layout_width="match_parent"
+  android:layout_height="match_parent">
+
+  <LinearLayout
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:orientation="vertical"
+    android:padding="16dp">
+
+    <TextView
+      android:layout_width="match_parent"
+      android:layout_height="wrap_content"
+      android:text="@string/title_settings"
+      android:textSize="20sp"
+      android:textStyle="bold" />
+
+    <EditText
+      android:id="@+id/etBaseUrl"
+      android:layout_width="match_parent"
+      android:layout_height="wrap_content"
+      android:layout_marginTop="12dp"
+      android:autofillHints=""
+      android:hint="@string/hint_base_url"
+      android:inputType="textUri" />
+
+    <EditText
+      android:id="@+id/etIngestToken"
+      android:layout_width="match_parent"
+      android:layout_height="wrap_content"
+      android:layout_marginTop="8dp"
+      android:autofillHints=""
+      android:hint="@string/hint_ingest_token"
+      android:inputType="textPassword" />
+
+    <Button
+      android:id="@+id/btnSaveSettings"
+      android:layout_width="match_parent"
+      android:layout_height="wrap_content"
+      android:layout_marginTop="12dp"
+      android:text="@string/btn_save_settings" />
+
+    <TextView
+      android:layout_width="match_parent"
+      android:layout_height="wrap_content"
+      android:layout_marginTop="20dp"
+      android:text="@string/title_health"
+      android:textSize="20sp"
+      android:textStyle="bold" />
+
+    <Button
+      android:id="@+id/btnOpenHealthConnect"
+      android:layout_width="match_parent"
+      android:layout_height="wrap_content"
+      android:layout_marginTop="12dp"
+      android:text="@string/btn_open_health_connect" />
+
+    <Button
+      android:id="@+id/btnRequestPermissions"
+      android:layout_width="match_parent"
+      android:layout_height="wrap_content"
+      android:layout_marginTop="8dp"
+      android:text="@string/btn_request_permissions" />
+
+    <TextView
+      android:layout_width="match_parent"
+      android:layout_height="wrap_content"
+      android:layout_marginTop="20dp"
+      android:text="@string/title_sync"
+      android:textSize="20sp"
+      android:textStyle="bold" />
+
+    <Button
+      android:id="@+id/btnSyncNow"
+      android:layout_width="match_parent"
+      android:layout_height="wrap_content"
+      android:layout_marginTop="12dp"
+      android:text="@string/btn_sync_now" />
+
+    <Button
+      android:id="@+id/btnStartBackground"
+      android:layout_width="match_parent"
+      android:layout_height="wrap_content"
+      android:layout_marginTop="8dp"
+      android:text="@string/btn_start_background" />
+
+    <Button
+      android:id="@+id/btnStopBackground"
+      android:layout_width="match_parent"
+      android:layout_height="wrap_content"
+      android:layout_marginTop="8dp"
+      android:text="@string/btn_stop_background" />
+
+    <TextView
+      android:id="@+id/tvStatus"
+      android:layout_width="match_parent"
+      android:layout_height="wrap_content"
+      android:layout_marginTop="20dp"
+      android:text="@string/status_idle"
+      android:textIsSelectable="true"
+      android:textSize="14sp" />
+  </LinearLayout>
+</ScrollView>

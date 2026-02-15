@@ -1,66 +1,68 @@
-# Mobile Bridge Android (Health Connect -> Integrations API)
+# Nightscout Mobile Bridge (Android Studio project)
 
-This folder documents the Android companion app you need for full automation:
+Android app that reads Health Connect data (meals, steps, weight) and sends it to:
 
-`MyFitnessPal -> Health Connect -> Android bridge -> Integrations API -> Electron desktop`
+`POST /ingest/health-connect` on your `integrations-api` Railway service.
 
-## Goal
+## What is included
 
-Read Health Connect records (nutrition, steps, weight) on device, then push a normalized payload to `POST /ingest/health-connect`.
+- Full Android Studio project (`settings.gradle.kts`, `app/`, manifest, UI, worker)
+- Runtime permission flow for Health Connect
+- Manual sync button
+- Background sync with WorkManager every 15 minutes
+- Config screen fields:
+  - Integrations API URL
+  - `INGEST_TOKEN`
 
-## Required stack
+## Open in Android Studio
 
-- Android Studio (latest stable)
-- Kotlin + Jetpack
-- `androidx.health.connect:connect-client`
-- WorkManager for background sync (15 min minimum interval)
+1. Open Android Studio.
+2. Click `Open`.
+3. Select folder: `apps/mobile-bridge-android`.
+4. Let Gradle sync finish.
+5. If prompted, install:
+   - Android SDK Platform 36
+   - Build-Tools for API 36
+6. Ensure project JDK is 17 (`File -> Settings -> Build Tools -> Gradle -> Gradle JDK`).
+7. Connect your Android phone (USB debugging enabled).
+8. Click `Run` (green triangle).
 
-## Permissions to request
+## Build APK and install manually
 
-- `NutritionRecord` read permission
-- `WeightRecord` read permission
-- `StepsRecord` read permission
+You can install without Android Studio Run:
 
-## Suggested app behavior
+1. `Build -> Build APK(s)`.
+2. APK output path:
+   - `app/build/outputs/apk/debug/app-debug.apk`
+3. Copy to phone and install.
+4. If Android blocks install, enable "Install unknown apps" for your file manager/browser.
 
-1. At startup, check Health Connect availability.
-2. Ask for permissions.
-3. Read the latest window:
-   - Meals: last 30 days (`NutritionRecord`)
-   - Weight: latest value (`WeightRecord`)
-   - Steps: aggregate last 24h (`StepsRecord`)
-4. Build payload.
-5. Send to Integrations API with header `x-ingest-token`.
-6. Store `lastSyncedAt` locally.
-7. Repeat with WorkManager.
+## First run
 
-## Expected payload
+1. Fill:
+   - API URL: `https://<your-integrations-api>.up.railway.app`
+   - `INGEST_TOKEN`
+2. Tap `Save settings`.
+3. Tap `Open Health Connect`.
+4. Tap `Request permissions`.
+5. Tap `Sync now`.
 
-```json
-{
-  "deviceId": "android-device-id",
-  "syncedAt": "2026-02-15T11:30:00.000Z",
-  "summary": {
-    "stepsLast24h": 8400,
-    "weightKgLatest": 72.4,
-    "weightUpdatedAt": "2026-02-15T08:15:00.000Z"
-  },
-  "meals": [
-    {
-      "id": "nutrition-record-id",
-      "name": "Meal",
-      "carbsGrams": 63,
-      "calories": 540,
-      "eatenAt": "2026-02-15T12:10:00.000Z",
-      "source": "myfitnesspal"
-    }
-  ]
-}
-```
+If sync works, Railway logs should show `POST /ingest/health-connect` with `200`.
 
-## Notes
+## Troubleshooting permissions
 
-- Health Connect is local Android API, there is no Google API key to create for this flow.
-- MyFitnessPal API key is not required in this architecture.
-- MFP must be connected to Health Connect in the MFP app.
-- See `sample/HealthConnectSyncWorker.kt` and `sample/IntegrationsApiClient.kt` for a starter implementation.
+If `Open Health Connect` or `Request permissions` shows nothing:
+
+1. Confirm Health Connect exists on phone:
+   - package `com.google.android.apps.healthdata`
+2. Open Health Connect app manually and verify it launches.
+3. In Android settings, confirm app is installed and has no blocked activity launch restrictions.
+4. Retry from app:
+   - `Open Health Connect`
+   - `Request permissions`
+5. Check status text in app for errors/missing permissions.
+
+## Important
+
+- MyFitnessPal must be connected to Health Connect on your phone.
+- If Health Connect is missing/outdated, use `Open Health Connect` to install/update.

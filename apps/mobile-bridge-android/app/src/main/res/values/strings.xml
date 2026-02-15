@@ -1,0 +1,15 @@
+<resources>
+  <string name="app_name">Nightscout Mobile Bridge</string>
+  <string name="title_settings">Integrations API settings</string>
+  <string name="title_health">Health Connect</string>
+  <string name="title_sync">Synchronization</string>
+  <string name="hint_base_url">https://your-integrations-api.up.railway.app</string>
+  <string name="hint_ingest_token">INGEST_TOKEN</string>
+  <string name="btn_save_settings">Save settings</string>
+  <string name="btn_open_health_connect">Open Health Connect</string>
+  <string name="btn_request_permissions">Request permissions</string>
+  <string name="btn_sync_now">Sync now</string>
+  <string name="btn_start_background">Start background sync (15 min)</string>
+  <string name="btn_stop_background">Stop background sync</string>
+  <string name="status_idle">Status: idle</string>
+</resources>
